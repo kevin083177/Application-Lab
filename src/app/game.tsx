@@ -1,183 +1,166 @@
-import { View, Text, StyleSheet, TouchableOpacity, Alert, SafeAreaView, StatusBar } from "react-native";
-import { useSocket } from "../contexts/SocketContext";
-import { useRouter } from "expo-router";
-import { useEffect } from "react";
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { useSocket } from '../contexts/SocketContext';
+import { useRouter } from 'expo-router';
 
 export default function Game() {
-    const { currentScenario, makeChoice, leaveRoom, room } = useSocket();
-    const router = useRouter();
+  const { socket, currentScenario, submitVote } = useSocket();
+  const router = useRouter();
+  
+  const [hasVoted, setHasVoted] = useState(false);
+  const [waitingForNext, setWaitingForNext] = useState(false);
 
-    useEffect(() => {
-        if (!room) {
-            router.replace('/');
-        }
-    }, [room]);
+  useEffect(() => {
+    if (currentScenario) {
+      setHasVoted(false);
+      setWaitingForNext(false);
+    }
+  }, [currentScenario]);
 
-    const handleOptionPress = (nextId: string | null) => {
-        if (nextId) {
-            makeChoice(nextId);
-        } else {
-            Alert.alert("遊戲結束", "你已到達結局", [
-                { text: "返回大廳", onPress: () => {
-                    leaveRoom();
-                    router.replace('/');
-                }}
-            ]);
-        }
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleVoteResult = () => {
+        setWaitingForNext(true);
+    };
+    
+    const handleRoomClosed = () => {
+        Alert.alert("遊戲結束", "房主已關閉房間", [
+            { text: "確定", onPress: () => router.replace('/') }
+        ]);
     };
 
-    if (!currentScenario) {
-        return (
-            <View style={styles.loadingContainer}>
-                <Text style={styles.loadingText}>載入場景中...</Text>
-            </View>
-        );
-    }
+    socket.on('vote:result', handleVoteResult);
+    socket.on('room:closed', handleRoomClosed);
 
-    const options = currentScenario.options || [];
-    const option1 = options[0];
-    const option2 = options[1];
+    return () => {
+        socket.off('vote:result', handleVoteResult);
+        socket.off('room:closed', handleRoomClosed);
+    };
+  }, [socket, router]);
 
-    return (
-        <View style={styles.container}>
-            <StatusBar barStyle="light-content" />
-            
-            <View style={styles.splitScreen}>
-                <TouchableOpacity 
-                    style={[styles.half, styles.topHalf]}
-                    activeOpacity={0.9}
-                    onPress={() => option1 ? handleOptionPress(option1.nextScenarioId) : null}
-                    disabled={!option1}
-                >
-                    <View style={styles.optionOverlay}>
-                         <Text style={styles.optionLabel}>A</Text>
-                         {option1 && <Text style={styles.optionText}>{option1.text}</Text>}
-                    </View>
-                </TouchableOpacity>
+  const handleVote = (optionId: string) => {
+      if (!socket || hasVoted) return;
 
-                <TouchableOpacity 
-                    style={[styles.half, styles.bottomHalf]}
-                    activeOpacity={0.9}
-                    onPress={() => option2 ? handleOptionPress(option2.nextScenarioId) : null}
-                    disabled={!option2}
-                >
-                    <View style={styles.optionOverlay}>
-                        <Text style={styles.optionLabel}>B</Text>
-                        {option2 ? (
-                            <Text style={styles.optionText}>{option2.text}</Text>
-                        ) : (
-                            <Text style={styles.endText}>沒有更多選項 (結局?)</Text>
-                        )}
-                    </View>
-                </TouchableOpacity>
-            </View>
+      submitVote(optionId);
+      setHasVoted(true);
+  };
 
-            <SafeAreaView style={styles.storyWrapper} pointerEvents="none">
-                <View style={styles.storyCard}>
-                    <Text style={styles.scenarioTitle}>{currentScenario.title}</Text>
-                    <Text style={styles.scenarioDesc}>
-                        {currentScenario.description}
-                    </Text>
-                </View>
-            </SafeAreaView>
+  if (!currentScenario) {
+      return (
+          <View style={styles.centerContainer}>
+              <ActivityIndicator size="large" color="#fff" style={{ marginBottom: 20 }} />
+              <Text style={styles.text}>載入場景中...</Text>
+          </View>
+      );
+  }
+
+  if (hasVoted) {
+      return (
+          <View style={styles.centerContainer}>
+              <Text style={styles.votedTitle}>已送出</Text>
+              <Text style={styles.votedSubtitle}>
+                  {waitingForNext ? "等待下一關..." : "等待其他玩家回答..."}
+              </Text>
+              {waitingForNext && <ActivityIndicator size="small" color="#666" style={{ marginTop: 20 }} />}
+          </View>
+      );
+  }
+
+  const optionA = currentScenario.options[0];
+  const optionB = currentScenario.options[1];
+
+  return (
+    <View style={styles.container}>
+      <TouchableOpacity 
+        style={[styles.optionButton, styles.optionA]} 
+        activeOpacity={0.9}
+        onPress={() => handleVote(optionA?.optionId)}
+      >
+        <Text style={styles.bgLabel}>A</Text>
+        
+        <View style={styles.textWrapper}>
+            <Text style={styles.optionText}>{optionA?.text || "Option A"}</Text>
         </View>
-    );
+      </TouchableOpacity>
+
+      <TouchableOpacity 
+        style={[styles.optionButton, styles.optionB]} 
+        activeOpacity={0.9}
+        onPress={() => handleVote(optionB?.optionId)}
+      >
+        <Text style={styles.bgLabel}>B</Text>
+        <View style={styles.textWrapper}>
+            <Text style={styles.optionText}>{optionB?.text || "Option B"}</Text>
+        </View>
+      </TouchableOpacity>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#000',
-    },
-    loadingContainer: {
-        flex: 1,
-        backgroundColor: '#111827',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    loadingText: {
-        color: '#fff',
-        fontSize: 20,
-    },
-    splitScreen: {
-        flex: 1,
-        flexDirection: 'column',
-    },
-    half: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-    },
-    topHalf: {
-        backgroundColor: '#1e3a8a',
-        borderBottomWidth: 2,
-        borderBottomColor: '#000',
-    },
-    bottomHalf: {
-        backgroundColor: '#be123c',
-        borderTopWidth: 2,
-        borderTopColor: '#000',
-    },
-    optionOverlay: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '100%',
-    },
-    optionLabel: {
-        fontSize: 80,
-        fontWeight: '900',
-        color: 'rgba(255,255,255,0.1)',
-        position: 'absolute',
-    },
-    optionText: {
-        color: '#fff',
-        fontSize: 24,
-        fontWeight: 'bold',
-        textAlign: 'center',
-        textShadowColor: 'rgba(0,0,0,0.75)',
-        textShadowOffset: {width: -1, height: 1},
-        textShadowRadius: 10,
-        zIndex: 10,
-    },
-    endText: {
-        color: '#999',
-        fontSize: 18,
-        fontStyle: 'italic',
-    },
-    
-    // 故事卡片樣式
-    storyWrapper: {
-        ...StyleSheet.absoluteFillObject, // 絕對定位覆蓋全屏
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 20, // 確保在最上層
-    },
-    storyCard: {
-        backgroundColor: 'rgba(0, 0, 0, 0.85)', // 半透明黑底
-        width: '85%',
-        padding: 25,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.2)',
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.5,
-        shadowRadius: 20,
-        alignItems: 'center',
-    },
-    scenarioTitle: {
-        color: '#fbbf24', // 金黃色
-        fontSize: 22,
-        fontWeight: 'bold',
-        marginBottom: 15,
-        textTransform: 'uppercase',
-        letterSpacing: 1,
-    },
-    scenarioDesc: {
-        color: '#e5e7eb', // 灰白色
-        fontSize: 16,
-        lineHeight: 24,
-        textAlign: 'center',
-    },
+  container: {
+    flex: 1,
+    flexDirection: 'column',
+  },
+  centerContainer: {
+      flex: 1,
+      backgroundColor: '#1a1a1a',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 20,
+  },
+  text: {
+      color: '#fff',
+      fontSize: 18,
+  },
+  votedTitle: {
+      color: '#00cc66',
+      fontSize: 36,
+      fontWeight: 'bold',
+      marginBottom: 16,
+      letterSpacing: 2,
+  },
+  votedSubtitle: {
+      color: '#888',
+      fontSize: 18,
+  },
+  
+  optionButton: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      position: 'relative',
+      overflow: 'hidden',
+  },
+  optionA: {
+      backgroundColor: '#FF6B6B',
+  },
+  optionB: {
+      backgroundColor: '#4ECDC4',
+  },
+  
+  bgLabel: {
+      fontSize: 180,
+      fontWeight: '900',
+      color: 'rgba(0,0,0,0.15)',
+      position: 'absolute',
+      zIndex: 1,
+  },
+  
+  textWrapper: {
+      zIndex: 2,
+      paddingHorizontal: 30,
+      alignItems: 'center',
+  },
+  optionText: {
+      fontSize: 32,
+      fontWeight: 'bold',
+      color: '#fff',
+      textAlign: 'center',
+      textShadowColor: 'rgba(0,0,0,0.3)',
+      textShadowOffset: { width: 1, height: 2 },
+      textShadowRadius: 4,
+      lineHeight: 40,
+  },
 });
