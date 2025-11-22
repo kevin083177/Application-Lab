@@ -62,7 +62,6 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         function onConnect() {
             setIsConnected(true);
             setSocketId(socket.id as string);
-            console.log("Socket connected:", socket.id);
         }
 
         function onDisconnect() {
@@ -70,11 +69,9 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
             setSocketId(null);
             setRoom(null);
             setCurrentScenario(null);
-            console.log("Socket disconnected");
         }
         
         function onConnectError(err: any) {
-            console.log("Connection Error:", err.message);
         }
 
         socket.on('connect', onConnect);

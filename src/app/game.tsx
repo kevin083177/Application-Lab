@@ -1,3 +1,4 @@
+/* */
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { useSocket } from '../contexts/SocketContext';
@@ -40,7 +41,7 @@ export default function Game() {
   }, [socket, router]);
 
   const handleVote = (optionId: string) => {
-      if (!socket || hasVoted) return;
+      if (!socket || hasVoted || waitingForNext) return;
 
       submitVote(optionId);
       setHasVoted(true);
@@ -51,6 +52,16 @@ export default function Game() {
           <View style={styles.centerContainer}>
               <ActivityIndicator size="large" color="#fff" style={{ marginBottom: 20 }} />
               <Text style={styles.text}>載入場景中...</Text>
+          </View>
+      );
+  }
+
+  if (waitingForNext && !hasVoted) {
+      return (
+          <View style={styles.centerContainer}>
+              <Text style={[styles.votedTitle, { color: '#ff4444' }]}>時間已到</Text>
+              <Text style={styles.votedSubtitle}>來不及投票，請等待下一關...</Text>
+              <ActivityIndicator size="small" color="#666" style={{ marginTop: 20 }} />
           </View>
       );
   }
@@ -76,9 +87,9 @@ export default function Game() {
         style={[styles.optionButton, styles.optionA]} 
         activeOpacity={0.9}
         onPress={() => handleVote(optionA?.optionId)}
+        disabled={waitingForNext}
       >
         <Text style={styles.bgLabel}>A</Text>
-        
         <View style={styles.textWrapper}>
             <Text style={styles.optionText}>{optionA?.text || "Option A"}</Text>
         </View>
@@ -88,6 +99,7 @@ export default function Game() {
         style={[styles.optionButton, styles.optionB]} 
         activeOpacity={0.9}
         onPress={() => handleVote(optionB?.optionId)}
+        disabled={waitingForNext}
       >
         <Text style={styles.bgLabel}>B</Text>
         <View style={styles.textWrapper}>

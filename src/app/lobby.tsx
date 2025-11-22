@@ -5,7 +5,7 @@ import { useSocket } from '../contexts/SocketContext';
 
 export default function Lobby() {
   const { code } = useLocalSearchParams();
-  const { socket } = useSocket();
+  const { socket, room, socketId } = useSocket();
   const router = useRouter();
 
   useEffect(() => {
@@ -28,12 +28,28 @@ export default function Lobby() {
     };
   }, [socket]);
 
+  const me = Array.isArray(room?.players) 
+    ? (room.players as any[]).find(p => p.id === socketId)
+    : null;
+
   return (
     <View style={styles.container}>
       <View style={styles.codeContainer}>
         <Text style={styles.codeLabel}>ROOM</Text>
         <Text style={styles.code}>{code}</Text>
       </View>
+
+      {me && (
+        <View style={styles.myInfoCard}>
+            <Text style={styles.myAvatar}>{me.avatar}</Text>
+            <Text style={styles.myName}>{me.name}</Text>
+            <Text style={styles.myId}>{me.id}</Text>
+            
+            <View style={styles.tagContainer}>
+                <Text style={styles.tagText}>這是你</Text>
+            </View>
+        </View>
+      )}
 
       <View style={styles.waitingArea}>
         <ActivityIndicator size="large" color="#fff" style={{ marginBottom: 20 }} />
@@ -56,7 +72,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   codeLabel: {
-    color: '#666',
+    color: '#ffffffff',
     fontSize: 14,
     letterSpacing: 2,
   },
@@ -66,6 +82,43 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     letterSpacing: 2,
   },
+  
+  myInfoCard: {
+    borderWidth: 3,
+    borderColor: '#00cc66',
+    borderRadius: 20,
+    padding: 30,
+    alignItems: 'center',
+    minWidth: 200,
+  },
+  myAvatar: {
+    fontSize: 60,
+    marginBottom: 10,
+  },
+  myName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 5,
+  },
+  myId: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 15,
+    fontFamily: 'monospace',
+  },
+  tagContainer: {
+    backgroundColor: '#00cc66',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+  },
+  tagText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+
   waitingArea: {
     alignItems: 'center',
   },
