@@ -1,12 +1,14 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { Alert } from "react-native";
 import { useRouter } from "expo-router";
+import { io, Socket } from "socket.io-client"; 
 import { socket } from "../socket/socket";
 import { Room } from "../interfaces/room";
 import { Scenario } from "../interfaces/scenario";
 import { SocketResponse } from "../interfaces/socket";
 
 interface SocketContextState {
+  socket: Socket; 
   socketId: string | null;
   isConnected: boolean;
   room: Room | null;
@@ -17,13 +19,14 @@ interface SocketContextState {
   leaveRoom: () => void;
   startGame: () => void;
   makeChoice: (nextScenarioId: string) => void;
+  submitVote: (optionId: string) => void; 
 }
 
 const SocketContext = createContext<SocketContextState | undefined>(undefined);
 
 export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
-    const [isConnected, setIsConnected] = useState<boolean>(false);
-    const [socketId, setSocketId] = useState<string | null>(null);
+    const [isConnected, setIsConnected] = useState<boolean>(socket.connected);
+    const [socketId, setSocketId] = useState<string | null>(socket.id || null);
     const [room, setRoom] = useState<Room | null>(null);
     const [currentScenario, setCurrentScenario] = useState<Scenario | null>(null);
     const router = useRouter();
@@ -47,18 +50,33 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         socket.emit('scenario:next', { nextScenarioId });
     };
 
+    const submitVote = (optionId: string) => {
+        socket.emit('vote:submit', { optionId });
+    };
+
     useEffect(() => {
-        socket.on('connect', () => {
+        if (!socket.connected) {
+            socket.connect();
+        }
+
+        function onConnect() {
             setIsConnected(true);
             setSocketId(socket.id as string);
-        });
+        }
 
-        socket.on('disconnect', () => {
+        function onDisconnect() {
             setIsConnected(false);
             setSocketId(null);
             setRoom(null);
             setCurrentScenario(null);
-        });
+        }
+        
+        function onConnectError(err: any) {
+        }
+
+        socket.on('connect', onConnect);
+        socket.on('disconnect', onDisconnect);
+        socket.on('connect_error', onConnectError);
 
         const handleRoomUpdate = (res: SocketResponse<Room>) => {
             if (res.success) {
@@ -81,6 +99,9 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         });
 
         socket.on('game:started', (res: SocketResponse<any>) => {
+            if (res.body && res.body.room) {
+                setRoom(res.body.room);
+            }
             router.replace('/game');
         });
 
@@ -100,8 +121,9 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         });
 
         return () => {
-            socket.off('connect');
-            socket.off('disconnect');
+            socket.off('connect', onConnect);
+            socket.off('disconnect', onDisconnect);
+            socket.off('connect_error', onConnectError);
             socket.off('room:created');
             socket.off('room:joined');
             socket.off('player:joined');
@@ -116,8 +138,9 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
     return (
         <SocketContext.Provider value={{ 
+            socket, 
             socketId, isConnected, room, currentScenario,
-            connect, disconnect, joinRoom, leaveRoom, startGame, makeChoice 
+            connect, disconnect, joinRoom, leaveRoom, startGame, makeChoice, submitVote
         }}>
             {children}
         </SocketContext.Provider>

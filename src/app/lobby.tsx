@@ -1,199 +1,135 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from "react-native"
-import { useSocket } from "../contexts/SocketContext"
-import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSocket } from '../contexts/SocketContext';
 
 export default function Lobby() {
-    const { room, socketId, leaveRoom, startGame } = useSocket();
-    const router = useRouter();
-    const [dots, setDots] = useState(''); 
+  const { code } = useLocalSearchParams();
+  const { socket, room, socketId } = useSocket();
+  const router = useRouter();
 
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setDots(prevDots => {
-                if (prevDots.length >= 3) {
-                    return ''; 
-                }
-                return prevDots + '.';
-            });
-        }, 500);
+  useEffect(() => {
+    if (!socket) return;
 
-        return () => clearInterval(interval);
-    }, [room, socketId]);
-
-    if (!room) return null;
-
-    const isHost = room.hostId === socketId;
-
-    const handleLeaveRoom = () => {
-        leaveRoom();
-
-        setTimeout(() => {
-            router.replace('/');
-        }, 100);
+    const handleGameStart = (response: any) => {
+        console.log("Game Started!", response);
+        router.replace('/game');
     };
 
-    return (
-        <View style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.label}>ROOM CODE</Text>
-                <Text style={styles.code}>{room.code}</Text>
-            </View>
+    socket.on('game:started', handleGameStart);
 
-            <View style={styles.playersContainer}>
-                <Text style={styles.sectionTitle}>
-                    等待玩家中 ({room.players.length}人)
-                </Text>
-                <ScrollView style={styles.list}>
-                    {room.players.map((pid, index) => (
-                        <View key={pid} style={styles.playerRow}>
-                            <View style={styles.playerInfo}>
-                                <View style={styles.avatar}>
-                                    <Text style={styles.avatarText}>{index + 1}</Text>
-                                </View>
-                                <Text style={styles.playerId}>
-                                    {pid}
-                                </Text>
-                            </View>
-                            {pid === socketId && (
-                                <View style={styles.hostTag}>
-                                    <Text style={styles.hostTagText}>You</Text>
-                                </View>
-                            )}
-                        </View>
-                    ))}
-                </ScrollView>
-            </View>
+    socket.on('room:closed', () => {
+        router.replace('/');
+    });
 
-            <View style={styles.footer}>
-                {isHost ? (
-                    <TouchableOpacity style={[styles.button, styles.startBtn]} onPress={startGame}>
-                        <Text style={styles.btnText}>開始遊戲</Text>
-                    </TouchableOpacity>
-                ) : (
-                    <View style={styles.waitingBox}>
-                        <Text style={styles.waitingText}>
-                            等待主持人開始遊戲{dots} 
-                        </Text>
-                    </View>
-                )}
+    return () => {
+        socket.off('game:started', handleGameStart);
+        socket.off('room:closed');
+    };
+  }, [socket]);
 
-                <TouchableOpacity style={[styles.button, styles.leaveBtn]} onPress={handleLeaveRoom}>
-                    <Text style={styles.btnText}>離開房間</Text>
-                </TouchableOpacity>
+  const me = Array.isArray(room?.players) 
+    ? (room.players as any[]).find(p => p.id === socketId)
+    : null;
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.codeContainer}>
+        <Text style={styles.codeLabel}>ROOM</Text>
+        <Text style={styles.code}>{code}</Text>
+      </View>
+
+      {me && (
+        <View style={styles.myInfoCard}>
+            <Text style={styles.myAvatar}>{me.avatar}</Text>
+            <Text style={styles.myName}>{me.name}</Text>
+            <Text style={styles.myId}>{me.id}</Text>
+            
+            <View style={styles.tagContainer}>
+                <Text style={styles.tagText}>這是你</Text>
             </View>
         </View>
-    );
+      )}
+
+      <View style={styles.waitingArea}>
+        <ActivityIndicator size="large" color="#fff" style={{ marginBottom: 20 }} />
+        <Text style={styles.waitingText}>等待其他玩家...</Text>
+        <Text style={styles.subText}>請留意大螢幕</Text>
+      </View>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: { 
-        flex: 1, 
-        backgroundColor: '#111827',
-        padding: 20,
-        paddingTop: 60,
-    },
-    header: {
-        alignItems: 'center',
-        marginBottom: 40,
-    },
-    label: {
-        color: '#9ca3af',
-        fontSize: 14,
-        letterSpacing: 2,
-        marginBottom: 5,
-    },
-    code: {
-        color: '#fff',
-        fontSize: 48,
-        fontWeight: 'bold',
-        letterSpacing: 5,
-        fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    },
-    playersContainer: {
-        flex: 1,
-        backgroundColor: '#1f2937',
-        borderRadius: 16,
-        padding: 20,
-        marginBottom: 20,
-    },
-    sectionTitle: {
-        color: '#fff',
-        fontSize: 18,
-        marginBottom: 15,
-        fontWeight: '600',
-    },
-    list: {
-        flex: 1,
-    },
-    playerRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: '#374151',
-    },
-    playerInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    avatar: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: '#374151',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: 12,
-    },
-    avatarText: {
-        color: '#9ca3af',
-        fontWeight: 'bold',
-    },
-    playerId: {
-        color: '#e5e7eb',
-        fontSize: 16,
-    },
-    hostTag: {
-        backgroundColor: '#4ade80',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 4,
-    },
-    hostTagText: {
-        color: '#fff',
-        fontSize: 12,
-        fontWeight: 'bold',
-    },
-    footer: {
-        gap: 15,
-    },
-    button: {
-        padding: 18,
-        borderRadius: 12,
-        alignItems: 'center',
-    },
-    startBtn: {
-        backgroundColor: '#10b981',
-    },
-    leaveBtn: {
-        backgroundColor: '#ef4444',
-    },
-    btnText: {
-        color: '#fff',
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    waitingBox: {
-        padding: 18,
-        alignItems: 'center',
-        backgroundColor: '#374151',
-        borderRadius: 12,
-    },
-    waitingText: {
-        color: '#93c5fd',
-        fontSize: 16,
-        fontWeight: '500',
-    },
+  container: {
+    flex: 1,
+    backgroundColor: '#1a1a1a',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 80,
+  },
+  codeContainer: {
+    alignItems: 'center',
+  },
+  codeLabel: {
+    color: '#ffffffff',
+    fontSize: 14,
+    letterSpacing: 2,
+  },
+  code: {
+    color: '#fff',
+    fontSize: 48,
+    fontWeight: 'bold',
+    letterSpacing: 2,
+  },
+  
+  myInfoCard: {
+    borderWidth: 3,
+    borderColor: '#00cc66',
+    borderRadius: 20,
+    padding: 30,
+    alignItems: 'center',
+    minWidth: 200,
+  },
+  myAvatar: {
+    fontSize: 60,
+    marginBottom: 10,
+  },
+  myName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 5,
+  },
+  myId: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 15,
+    fontFamily: 'monospace',
+  },
+  tagContainer: {
+    backgroundColor: '#00cc66',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+  },
+  tagText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+
+  waitingArea: {
+    alignItems: 'center',
+  },
+  waitingText: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  subText: {
+    color: '#666',
+    fontSize: 14,
+  }
 });

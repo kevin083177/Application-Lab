@@ -6,6 +6,8 @@ export interface Scenario {
 }
 
 export interface ScenarioOption {
-    text: string;
-    nextScenarioId: string | null;
+  optionId: string;
+  text: string;
+  consequence: string;
+  nextScenarioId: string | null;
 }
