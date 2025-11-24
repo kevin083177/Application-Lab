@@ -1,18 +1,23 @@
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSocket } from '../contexts/SocketContext';
+import Ionicons from '@react-native-vector-icons/ionicons';
 
 export default function Lobby() {
   const { code } = useLocalSearchParams();
-  const { socket, room, socketId } = useSocket();
+  const { socket, room, socketId, leaveRoom } = useSocket();
   const router = useRouter();
+
+  const handleLeaveRoom = () => {
+    leaveRoom();
+    router.replace('/');
+  }
 
   useEffect(() => {
     if (!socket) return;
 
     const handleGameStart = (response: any) => {
-        console.log("Game Started!", response);
         router.replace('/game');
     };
 
@@ -34,6 +39,9 @@ export default function Lobby() {
 
   return (
     <View style={styles.container}>
+      <TouchableOpacity style={styles.backButton} onPress={() => handleLeaveRoom()}>
+        <Ionicons name="arrow-back" size={24} color="#fff" />
+      </TouchableOpacity>
       <View style={styles.codeContainer}>
         <Text style={styles.codeLabel}>ROOM</Text>
         <Text style={styles.code}>{code}</Text>
@@ -46,7 +54,7 @@ export default function Lobby() {
             <Text style={styles.myId}>{me.id}</Text>
             
             <View style={styles.tagContainer}>
-                <Text style={styles.tagText}>這是你</Text>
+                <Text style={styles.tagText}>這是我</Text>
             </View>
         </View>
       )}
@@ -67,6 +75,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 80,
+  },
+  backButton: {
+    position: 'absolute',
+    top: 80,
+    left: 30,
   },
   codeContainer: {
     alignItems: 'center',
