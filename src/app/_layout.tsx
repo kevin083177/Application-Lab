@@ -9,6 +9,7 @@ export default function RootLayout() {
         <Stack.Screen name="index"/>
         <Stack.Screen name="lobby"/>
         <Stack.Screen name="game"/>
+        <Stack.Screen name="result" />
       </Stack>
     </SocketProvider>
   );
