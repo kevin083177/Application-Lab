@@ -11,3 +11,10 @@ export interface ScenarioOption {
   consequence: string;
   nextScenarioId: string | null;
 }
+
+export interface VoteResult { 
+  winningOptionId: string;
+  voteCounts: Record<string, number>;
+  nextScenarioId: string | null;
+  consequence: string;
+}

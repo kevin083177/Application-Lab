@@ -1,4 +1,6 @@
-{
+import 'dotenv/config';
+
+export default {
   "expo": {
     "name": "app-lab",
     "slug": "app-lab",
@@ -32,6 +34,7 @@
       "expo-router"
     ],
     "extra": {
+      "API_URL": `http://${process.env.EXPO_PUBLIC_IP}:${process.env.EXPO_PUBLIC_SOCKET_PORT}`,
       "router": {},
       "eas": {
         "projectId": "615f9903-2eeb-4579-8923-9890226ab8d9"
