@@ -105,7 +105,14 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
             router.replace('/game');
         });
 
-        const handleScenarioUpdate = (res: SocketResponse<Scenario>) => {
+        socket.on('game:restarted', (res: SocketResponse<any>) => {
+            setRoom(res.body.room);
+            setCurrentScenario(null);
+            
+            router.replace('/lobby'); 
+        });
+
+        const handleFirstScenario = (res: SocketResponse<Scenario>) => {
             if (res.success) {
                 setCurrentScenario(res.body);
             } else {
@@ -113,8 +120,18 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
             }
         };
 
-        socket.on('scenario:first', handleScenarioUpdate);
-        socket.on('scenario:next', handleScenarioUpdate);
+        const handleNextScenario = (res: SocketResponse<Scenario>) => {
+            if (res.success) {
+                setTimeout(() => {
+                    setCurrentScenario(res.body);
+                }, 1000);
+            } else {
+                Alert.alert('遊戲錯誤', res.message);
+            }
+        };
+
+        socket.on('scenario:first', handleFirstScenario);
+        socket.on('scenario:next', handleNextScenario);
 
         socket.on('exception', (data: { message: string }) => {
             Alert.alert('系統錯誤', data.message);

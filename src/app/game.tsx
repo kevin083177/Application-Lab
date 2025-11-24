@@ -1,28 +1,42 @@
-/* */
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { useSocket } from '../contexts/SocketContext';
 import { useRouter } from 'expo-router';
+import { SocketResponse } from '../interfaces/socket';
+import { VoteResult } from '../interfaces/scenario';
 
 export default function Game() {
   const { socket, currentScenario, submitVote } = useSocket();
   const router = useRouter();
   
   const [hasVoted, setHasVoted] = useState(false);
-  const [waitingForNext, setWaitingForNext] = useState(false);
+  
+  const [roundResult, setRoundResult] = useState<VoteResult | null>(null);
 
   useEffect(() => {
     if (currentScenario) {
       setHasVoted(false);
-      setWaitingForNext(false);
+      setRoundResult(null);
     }
   }, [currentScenario]);
 
   useEffect(() => {
+    if (roundResult && !roundResult.nextScenarioId) {
+      const timer = setTimeout(() => {
+        router.replace('/result');
+      }, 1500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [roundResult, router]);
+
+  useEffect(() => {
     if (!socket) return;
 
-    const handleVoteResult = () => {
-        setWaitingForNext(true);
+    const handleVoteResult = (response: SocketResponse<VoteResult>) => {
+        if (response.success && response.body) {
+            setRoundResult(response.body);
+        }
     };
     
     const handleRoomClosed = () => {
@@ -41,8 +55,7 @@ export default function Game() {
   }, [socket, router]);
 
   const handleVote = (optionId: string) => {
-      if (!socket || hasVoted || waitingForNext) return;
-
+      if (!socket || hasVoted || roundResult) return;
       submitVote(optionId);
       setHasVoted(true);
   };
@@ -56,24 +69,28 @@ export default function Game() {
       );
   }
 
-  if (waitingForNext && !hasVoted) {
-      return (
-          <View style={styles.centerContainer}>
-              <Text style={[styles.votedTitle, { color: '#ff4444' }]}>時間已到</Text>
-              <Text style={styles.votedSubtitle}>來不及投票，請等待下一關...</Text>
-              <ActivityIndicator size="small" color="#666" style={{ marginTop: 20 }} />
-          </View>
-      );
-  }
+//   if (roundResult) {
+//       const isGameOver = !roundResult.nextScenarioId; 
+
+//       return (
+//           <View style={[styles.centerContainer, { paddingHorizontal: 24 }]}>
+//               <Text style={styles.consequenceTitle}>選擇結果</Text>
+              
+//               <View style={styles.consequenceBox}>
+//                   <Text style={styles.consequenceText}>
+//                       {roundResult.consequence}
+//                   </Text>
+//               </View>
+//           </View>
+//       );
+//   }
 
   if (hasVoted) {
       return (
           <View style={styles.centerContainer}>
               <Text style={styles.votedTitle}>已送出</Text>
-              <Text style={styles.votedSubtitle}>
-                  {waitingForNext ? "等待下一關..." : "等待其他玩家回答..."}
-              </Text>
-              {waitingForNext && <ActivityIndicator size="small" color="#666" style={{ marginTop: 20 }} />}
+              <Text style={styles.votedSubtitle}>等待其他玩家...</Text>
+              <ActivityIndicator size="small" color="#666" style={{ marginTop: 20 }} />
           </View>
       );
   }
@@ -86,24 +103,22 @@ export default function Game() {
       <TouchableOpacity 
         style={[styles.optionButton, styles.optionA]} 
         activeOpacity={0.9}
-        onPress={() => handleVote(optionA?.optionId)}
-        disabled={waitingForNext}
+        onPress={() => handleVote(optionA.optionId)}
       >
         <Text style={styles.bgLabel}>A</Text>
         <View style={styles.textWrapper}>
-            <Text style={styles.optionText}>{optionA?.text || "Option A"}</Text>
+            <Text style={styles.optionText}>{optionA.text}</Text>
         </View>
       </TouchableOpacity>
 
       <TouchableOpacity 
         style={[styles.optionButton, styles.optionB]} 
         activeOpacity={0.9}
-        onPress={() => handleVote(optionB?.optionId)}
-        disabled={waitingForNext}
+        onPress={() => handleVote(optionB.optionId)}
       >
         <Text style={styles.bgLabel}>B</Text>
         <View style={styles.textWrapper}>
-            <Text style={styles.optionText}>{optionB?.text || "Option B"}</Text>
+            <Text style={styles.optionText}>{optionB.text}</Text>
         </View>
       </TouchableOpacity>
     </View>
@@ -111,6 +126,7 @@ export default function Game() {
 }
 
 const styles = StyleSheet.create({
+  // ... 樣式保持不變
   container: {
     flex: 1,
     flexDirection: 'column',
@@ -137,7 +153,33 @@ const styles = StyleSheet.create({
       color: '#888',
       fontSize: 18,
   },
-  
+  consequenceTitle: {
+      color: '#FFD700',
+      fontSize: 28,
+      fontWeight: 'bold',
+      marginBottom: 20,
+      letterSpacing: 1,
+  },
+  consequenceBox: {
+      backgroundColor: 'rgba(255,255,255,0.1)',
+      padding: 24,
+      borderRadius: 16,
+      borderLeftWidth: 4,
+      borderLeftColor: '#FFD700',
+      width: '100%',
+  },
+  consequenceText: {
+      color: '#fff',
+      fontSize: 20,
+      lineHeight: 32,
+      textAlign: 'center',
+      fontWeight: '500',
+  },
+  statusText: {
+      color: '#888',
+      fontSize: 16,
+      marginBottom: 16,
+  },
   optionButton: {
       flex: 1,
       alignItems: 'center',
@@ -151,7 +193,6 @@ const styles = StyleSheet.create({
   optionB: {
       backgroundColor: '#4ECDC4',
   },
-  
   bgLabel: {
       fontSize: 180,
       fontWeight: '900',
@@ -159,7 +200,6 @@ const styles = StyleSheet.create({
       position: 'absolute',
       zIndex: 1,
   },
-  
   textWrapper: {
       zIndex: 2,
       paddingHorizontal: 30,
