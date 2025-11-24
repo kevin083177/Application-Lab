@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "app",
-    "slug": "app",
+    "name": "app-lab",
+    "slug": "app-lab",
     "scheme": "myapp",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -26,10 +26,22 @@
     },
     "web": {
       "favicon": "./src/assets/favicon.png",
-      "bundler": "metro" 
+      "bundler": "metro"
     },
     "plugins": [
       "expo-router"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "615f9903-2eeb-4579-8923-9890226ab8d9"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/615f9903-2eeb-4579-8923-9890226ab8d9"
+    }
   }
 }
