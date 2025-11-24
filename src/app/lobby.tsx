@@ -3,10 +3,13 @@ import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'rea
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSocket } from '../contexts/SocketContext';
 import Ionicons from '@react-native-vector-icons/ionicons';
+import { useNotification } from '../contexts/NotificationContext';
 
 export default function Lobby() {
   const { code } = useLocalSearchParams();
-  const { socket, room, socketId, leaveRoom } = useSocket();
+  const { socket, room, socketId, leaveRoom, setRoom } = useSocket();
+  
+  const { showSuccess, showError, showWarning } = useNotification();
   const router = useRouter();
 
   const handleLeaveRoom = () => {
@@ -17,19 +20,23 @@ export default function Lobby() {
   useEffect(() => {
     if (!socket) return;
 
+    const onPlayerKicked = (data: { reason: string }) => {
+      setRoom(null);
+      
+      showWarning(data.reason || "您已被房主踢出房間");
+      router.replace('/');
+    };
+
     const handleGameStart = (response: any) => {
         router.replace('/game');
     };
 
+    socket.on('player:kicked', onPlayerKicked);
     socket.on('game:started', handleGameStart);
-
-    socket.on('room:closed', () => {
-        router.replace('/');
-    });
 
     return () => {
         socket.off('game:started', handleGameStart);
-        socket.off('room:closed');
+        socket.off('player:kicked', onPlayerKicked);
     };
   }, [socket]);
 

@@ -1,17 +1,46 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, ScrollView } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, FlatList, Dimensions }from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSocket } from '../contexts/SocketContext';
 import { ANIMALS } from '../interfaces/player';
+import { useNotification } from '../contexts/NotificationContext';
+
+const { width } = Dimensions.get('window');
+const ITEM_SIZE = 80;
+const ITEM_SPACING = 20;
+const SNAP_INTERVAL = ITEM_SIZE + ITEM_SPACING;
+const CONTAINER_PADDING = 50;
+
+const EmojiItem = memo(({ item, isSelected, onPress }: { item: string, isSelected: boolean, onPress: () => void }) => {
+  return (
+    <View style={{ width: ITEM_SIZE, marginHorizontal: ITEM_SPACING / 2, alignItems: 'center' }}>
+        <TouchableOpacity
+            onPress={onPress}
+            style={[
+                styles.emojiItem,
+                isSelected && styles.emojiSelected
+            ]}
+            activeOpacity={0.8}
+        >
+            <Text style={styles.emojiText}>{item}</Text>
+        </TouchableOpacity>
+    </View>
+  );
+}, (prevProps, nextProps) => {
+  return prevProps.item === nextProps.item && prevProps.isSelected === nextProps.isSelected;
+});
 
 export default function Home() {
   const [roomCode, setRoomCode] = useState('');
   const [playerName, setPlayerName] = useState('');
-  const [selectedEmoji, setSelectedEmoji] = useState('🐶');
+  const [selectedEmoji, setSelectedEmoji] = useState(ANIMALS[0]);
   const [isJoining, setIsJoining] = useState(false);
   
   const { socket, isConnected } = useSocket();
   const router = useRouter();
+  const flatListRef = useRef<FlatList>(null);
+
+  const { showSuccess, showError, showWarning } = useNotification();
 
   useEffect(() => {
     if (!socket) return;
@@ -28,7 +57,7 @@ export default function Home() {
     const onRoomError = (error: any) => {
       if (!isJoining) return;
       setIsJoining(false);
-      Alert.alert("錯誤", error.message || "無法加入房間");
+      showError(error.message || "無法加入房間");
     };
 
     socket.on('room:joined', onRoomJoined);
@@ -42,15 +71,15 @@ export default function Home() {
 
   const handleJoinRoom = () => {
     if (!socket || !isConnected) {
-      Alert.alert("連線錯誤", "尚未連接到伺服器");
+      showError("尚未連接到伺服器");
       return;
     }
     if (!roomCode.trim()) {
-        Alert.alert("提示", "請輸入房號");
+        showError("請輸入房間號碼");
         return;
     }
     if (!playerName.trim()) {
-        Alert.alert("提示", "請輸入名稱");
+        showError("請輸入名稱");
         return;
     }
 
@@ -63,9 +92,41 @@ export default function Home() {
     });
   };
 
+  const handleScroll = (event: any) => {
+    const offsetX = event.nativeEvent.contentOffset.x;
+    const index = Math.round(offsetX / SNAP_INTERVAL);
+    if (index >= 0 && index < ANIMALS.length) {
+        if (ANIMALS[index] !== selectedEmoji) {
+            setSelectedEmoji(ANIMALS[index]);
+        }
+    }
+  };
+
+  const renderItem = useCallback(({ item, index }: { item: string, index: number }) => {
+    return (
+      <EmojiItem 
+        item={item} 
+        isSelected={selectedEmoji === item} 
+        onPress={() => {
+            setSelectedEmoji(item);
+            flatListRef.current?.scrollToOffset({
+                offset: index * SNAP_INTERVAL,
+                animated: true
+            });
+        }}
+      />
+    );
+  }, [selectedEmoji]);
+
+  const getItemLayout = useCallback((data: any, index: number) => ({
+    length: ITEM_SIZE,
+    offset: SNAP_INTERVAL * index,
+    index,
+  }), []);
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Hello</Text>
+      <Text style={styles.title}>Welcome !</Text>
       
       <View style={styles.statusContainer}>
         <View style={[styles.dot, { backgroundColor: isConnected ? '#00cc66' : '#ff4444' }]} />
@@ -73,22 +134,6 @@ export default function Home() {
       </View>
 
       <View style={styles.formContainer}>
-        <View style={styles.emojiContainer}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.emojiScroll}>
-                {ANIMALS.map((emoji) => (
-                    <TouchableOpacity 
-                        key={emoji} 
-                        onPress={() => setSelectedEmoji(emoji)}
-                        style={[
-                            styles.emojiItem, 
-                            selectedEmoji === emoji && styles.emojiSelected
-                        ]}
-                    >
-                        <Text style={styles.emojiText}>{emoji}</Text>
-                    </TouchableOpacity>
-                ))}
-            </ScrollView>
-        </View>
         <View style={styles.inputWrapper}>
             <Text style={styles.label}>房間號碼</Text>
             <TextInput
@@ -111,6 +156,30 @@ export default function Home() {
             placeholder="輸入你的名稱"
             placeholderTextColor="#666"
             maxLength={10}
+            />
+        </View>
+
+        <Text style={styles.label}>選擇你的頭像</Text>
+        <View style={styles.emojiListContainer}>
+            <FlatList
+                ref={flatListRef}
+                data={ANIMALS}
+                renderItem={renderItem}
+                keyExtractor={(item) => item}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                snapToInterval={SNAP_INTERVAL}
+                decelerationRate="fast"
+                getItemLayout={getItemLayout}
+                initialNumToRender={5}
+                maxToRenderPerBatch={5}
+                windowSize={5}
+                contentContainerStyle={{
+                  paddingVertical: 10,
+                  paddingHorizontal: (width - CONTAINER_PADDING * 2 - ITEM_SIZE) / 2
+                }}
+                onScroll={handleScroll}
+                scrollEventThrottle={16}
             />
         </View>
       </View>
@@ -154,16 +223,52 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 20,
   },
-  dot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
-  statusText: { color: '#ccc', fontSize: 12 },
-  
+  dot: { 
+    width: 8, 
+    height: 8, 
+    borderRadius: 4, 
+    marginRight: 6 
+  },
+  statusText: { 
+    color: '#ccc', 
+    fontSize: 12 
+  },
   formContainer: {
-      width: '100%',
-      maxWidth: 320,
-      marginBottom: 30,
+    width: '100%',
+    maxWidth: 320,
+    marginBottom: 30,
+  },
+  sectionLabel: {
+    color: '#888',
+    fontSize: 12,
+    marginBottom: 12,
+    letterSpacing: 1,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  emojiListContainer: {
+    height: 100,
+  },
+  emojiItem: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#2a2a2a',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  emojiSelected: {
+    borderColor: '#00cc66',
+    backgroundColor: '#1a1a1a',
+    transform: [{ scale: 1.1 }],
+  },
+  emojiText: {
+    fontSize: 32,
   },
   inputWrapper: {
-      marginBottom: 20,
+    marginBottom: 20,
   },
   label: {
     color: '#888',
@@ -183,29 +288,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#333',
   },
-  
-  emojiContainer: {
-      marginBottom: 20,
-  },
-  emojiScroll: {
-      paddingHorizontal: 10,
-      alignItems: 'center',
-  },
-  emojiItem: {
-      padding: 10,
-      marginHorizontal: 5,
-      borderRadius: 30,
-      borderWidth: 2,
-      borderColor: 'transparent',
-  },
-  emojiSelected: {
-      borderColor: '#00cc66',
-      backgroundColor: '#1a1a1a',
-  },
-  emojiText: {
-      fontSize: 24,
-  },
-
   button: {
     backgroundColor: '#fff',
     paddingVertical: 18,
@@ -215,6 +297,13 @@ const styles = StyleSheet.create({
     maxWidth: 320,
     alignItems: 'center',
   },
-  buttonDisabled: { backgroundColor: '#555', opacity: 0.7 },
-  buttonText: { color: '#000', fontSize: 18, fontWeight: 'bold' },
+  buttonDisabled: { 
+    backgroundColor: '#555', 
+    opacity: 0.7 
+  },
+  buttonText: { 
+    color: '#000', 
+    fontSize: 18, 
+    fontWeight: 'bold' 
+  },
 });

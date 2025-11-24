@@ -1,11 +1,11 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { io, Socket } from "socket.io-client"; 
 import { socket } from "../socket/socket";
 import { Room } from "../interfaces/room";
 import { Scenario } from "../interfaces/scenario";
 import { SocketResponse } from "../interfaces/socket";
+import { useNotification } from "./NotificationContext";
 
 interface SocketContextState {
   socket: Socket; 
@@ -19,7 +19,8 @@ interface SocketContextState {
   leaveRoom: () => void;
   startGame: () => void;
   makeChoice: (nextScenarioId: string) => void;
-  submitVote: (optionId: string) => void; 
+  submitVote: (optionId: string) => void;
+  setRoom: (room: Room | null) => void;
 }
 
 const SocketContext = createContext<SocketContextState | undefined>(undefined);
@@ -30,6 +31,8 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     const [room, setRoom] = useState<Room | null>(null);
     const [currentScenario, setCurrentScenario] = useState<Scenario | null>(null);
     const router = useRouter();
+
+    const { showSuccess, showError, showWarning } = useNotification();
 
     const connect = () => {
         if (!socket.connected) socket.connect();
@@ -82,7 +85,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
             if (res.success) {
                 setRoom(res.body);
             } else {
-                Alert.alert('錯誤', res.message);
+                showError(res.message);
             }
         };
 
@@ -92,10 +95,10 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         socket.on('player:left', handleRoomUpdate);
 
         socket.on('room:closed', () => {
-            Alert.alert('通知', '房間已解散');
             setRoom(null);
             setCurrentScenario(null);
             router.replace('/');
+            showWarning('房主已離開房間');
         });
 
         socket.on('game:started', (res: SocketResponse<any>) => {
@@ -108,15 +111,17 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         socket.on('game:restarted', (res: SocketResponse<any>) => {
             setRoom(res.body.room);
             setCurrentScenario(null);
-            
-            router.replace('/lobby'); 
+            router.replace({ 
+                pathname: '/lobby', 
+                params: { code: res.body.room.code } 
+            }); 
         });
 
         const handleFirstScenario = (res: SocketResponse<Scenario>) => {
             if (res.success) {
                 setCurrentScenario(res.body);
             } else {
-                Alert.alert('遊戲錯誤', res.message);
+                showError(res.message);
             }
         };
 
@@ -126,7 +131,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
                     setCurrentScenario(res.body);
                 }, 1000);
             } else {
-                Alert.alert('遊戲錯誤', res.message);
+                showError(res.message);
             }
         };
 
@@ -134,7 +139,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         socket.on('scenario:next', handleNextScenario);
 
         socket.on('exception', (data: { message: string }) => {
-            Alert.alert('系統錯誤', data.message);
+           showError(data.message);
         });
 
         return () => {
@@ -157,7 +162,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         <SocketContext.Provider value={{ 
             socket, 
             socketId, isConnected, room, currentScenario,
-            connect, disconnect, joinRoom, leaveRoom, startGame, makeChoice, submitVote
+            connect, disconnect, joinRoom, leaveRoom, startGame, makeChoice, submitVote, setRoom
         }}>
             {children}
         </SocketContext.Provider>
